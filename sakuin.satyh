@@ -1,0 +1,53 @@
+@require: list
+@require: annot
+
+module Sakuin: sig
+  direct \index: [inline-text] inline-cmd
+  direct +make-sakuin: [] block-cmd
+end = struct
+  let-mutable sakuin <- []
+  let-mutable stext <- `sindex`
+  let-mutable sindex <- 0
+
+  let-inline ctx \index arg =
+    let () = sindex <- !sindex + 1 in
+    let text = (arabic !sindex) in
+    let param = (arg, !sindex) in
+    let label = `sakuin:` ^ arabic !sindex in
+    let line = hook-page-break (fun pbinfo _ -> (
+      let pageno = pbinfo#page-number in
+      register-cross-reference (label) (arabic pageno))
+    ) in
+    let () = sakuin <- param :: !sakuin in read-inline ctx { #arg; } ++ line
+
+  let-block ctx +make-sakuin =
+    let l = get-font-size ctx *' 0.25 in
+    let bbs =
+      !sakuin 
+        |> List.map (
+          fun (it, i) -> line-break true true (
+            ctx |> set-paragraph-margin l l)
+              (
+                let text = embed-string (arabic i) in
+                let label = `sakuin:` ^ (arabic i) in
+                let opt = get-cross-reference (label) in
+                let page =
+                  match opt with
+                  | None    -> {?}
+                  | Some(s) -> embed-string s
+                in
+                let link =
+                  inline-frame-breakable
+                  (0pt, 0pt , 0pt, 0pt)
+                  (Annot.link-to-location-frame (label) None)
+                  (read-inline ctx page)
+                  in
+                  (read-inline ctx it ++ inline-fil ++ (read-inline ctx { --- p }) ++ link)
+                    % (read-inline ctx it ++ inline-fil ++ (read-inline ctx { --- p }) ++ read-inline ctx {#text;})
+              )
+        )
+        in
+      bbs 
+        |> List.reverse 
+        |> List.fold-left (+++) block-nil
+end
